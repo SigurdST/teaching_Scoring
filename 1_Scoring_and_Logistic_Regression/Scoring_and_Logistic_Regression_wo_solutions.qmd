@@ -33,14 +33,11 @@ library(tidyverse)
 
 # Introduction and vocabulary
 
-
 ## A reminder (or not) on Supervised Learning
-
 
 This an informal overview of Statistical Learning, where we introduce concepts and definitions. For a rigorous introduction see for example the dedicated lesson from [Sébastien Gadat - D3S M1 course on Mathematical Statistics](https://perso.math.univ-toulouse.fr/gadat/files/2012/12/Intro_Stat_Learning.pdf) or [Francis Bach - Learning Theory from First Principles](https://www.di.ens.fr/%7Efbach/ltfp_book.pdf).
 
 ### Inputs-Outputs
-
 
 We follow here the terminology of @hastie2009. The problem: we are given a data set where some variables, denoted as **inputs**[^1], have some influence on one or more **output(s)**[^2].
 
@@ -72,12 +69,11 @@ $$
 
 where we denote $\mathbf P_{\mathrm X \times \mathrm Y}$, the data generating distribution (or underlying probability distribution or joint law) which is unknown.
 
-The main goal of supervised learning will be to predict unobserved outputs $y$ given unobserved inputs $x$ using the learning set. 
+The main goal of supervised learning will be to predict unobserved outputs $y$ given unobserved inputs $x$ using the learning set.
 
 Such new or unobserved data is referred as the **testing** set.
 
 ### Loss and Risk
-
 
 To achieve that goal we try to find a "best" or optimal **classifier** (or prediction function in general):
 
@@ -124,7 +120,6 @@ $$
 
 ### Bayes classifier
 
-
 We now define the **Bayes(ian) classifier** $f^*: \mathrm X \to \mathrm Y$ as a function that achieves the minimal expected risk among all possible functions:
 
 $$
@@ -154,18 +149,16 @@ $\eta(x)$ is called the regression function.
 
 ::: {.callout-note collapse="true"}
 #### Proof
+
 Given $f$ a classifier:
 
-Using 0-1 loss definition:
-$$
+Using 0-1 loss definition: $$
 \begin{align*}
 \mathrm R(f)  &= \mathbb{E}_{X,Y}[\ell(Y,f(X))] \\
 &=\mathbb{E}_{X,Y}[\mathbf 1_{Y=1} \mathbf 1_{f(X)=0} + \mathbf 1_{Y=0} \mathbf 1_{f(X)=1} ] \\
 &= \mathbb{E}_{X}[\mathbb{E}_{Y|X}[\mathbf 1_{Y=1} \mathbf 1_{f(X)=0} + \mathbf 1_{Y=0} \mathbf 1_{f(X)=1}|X]]  \\ 
 \end{align*}
-$$
-Using "Tower Rule" conditioning on $X$ then using $\eta(X)$ definition:
-$$
+$$ Using "Tower Rule" conditioning on $X$ then using $\eta(X)$ definition: $$
 \begin{align*}
 &= \mathbb{E}_{X}[\mathbb{E}_{Y|X}[\mathbf 1_{Y=1} \mathbf 1_{f(X)=0} + \mathbf 1_{Y=0} \mathbf 1_{f(X)=1}|X]]  \\ 
 &= \mathbb{E}_{X}[\mathbf 1_{f(X)=0}\mathbb{E}_{Y|X}[\mathbf 1_{Y=1}] + \mathbf 1_{f(X)=1} \mathbb{E}_{Y|X}[\mathbf 1_{Y=0}|X]] \\
@@ -173,12 +166,11 @@ $$
 &=\mathbb{E}_{X}[(1-\mathbf 1_{f(X)=1})\eta(X) + \mathbf 1_{f(X)=1} (1-\eta(X))] \\
 &=\mathbb{E}_{X}[(\mathbf 1_{f(X)=1}(1-2\eta(X))] + \mathbb{E}_{X}[\eta(X))] \\
 \end{align*}
-$$
-To minimize the risk with respect to $f$:
+$$ To minimize the risk with respect to $f$:
 
-- if $1-2\eta(X) \leq0$ (ie $\eta(X) \geq \frac{1}{2}$), we need $f(X)=1$
+-   if $1-2\eta(X) \leq0$ (ie $\eta(X) \geq \frac{1}{2}$), we need $f(X)=1$
 
-- if $1-2\eta(X) \geq0$ (ie $\eta(X) \leq \frac{1}{2}$), we need $f(X)=0$
+-   if $1-2\eta(X) \geq0$ (ie $\eta(X) \leq \frac{1}{2}$), we need $f(X)=0$
 
 It is mostly how was defined $f^*$ before:
 
@@ -192,7 +184,7 @@ $$
 
 ### Theory vs practice
 
-In practice $\mathbf P_{\mathrm X \times \mathrm Y}$ is unknown. What we have is the learning set. The Bayes classifier minimizes the expected risk but is not a function of the learning set.  What to do?
+In practice $\mathbf P_{\mathrm X \times \mathrm Y}$ is unknown. What we have is the learning set. The Bayes classifier minimizes the expected risk but is not a function of the learning set. What to do?
 
 Conceptually two approaches are used[^3]:
 
@@ -200,13 +192,13 @@ Conceptually two approaches are used[^3]:
 
 -   the "probabilistic" approach: we estimate the regression function $\eta(x)$ and use/plug this estimate "inside" the Bayes classifier (Plugin); within this approach mainly two sub-approaches:
 
-    - the "discriminative" approach or conditional density modeling: we directly model or make an assumption on $\eta(X)=\mathbf P_{\mathrm Y | \mathrm X}$ and estimate it; for example we can make the assumption that $\eta(x)$ is a function of a particular form.
+    -   the "discriminative" approach or conditional density modeling: we directly model or make an assumption on $\eta(X)=\mathbf P_{\mathrm Y | \mathrm X}$ and estimate it; for example we can make the assumption that $\eta(x)$ is a function of a particular form.
 
-    - the "generative" approach: we model the conditional distribution $\mathbf P_{\mathrm X | \mathrm Y}$ and use Bayes formula to get: $\eta(X)=\frac{\mathbb{P}[X|Y=1)]\mathbb{P}[Y=1)]}{\mathbb{P}[X]}=\frac{\mathbb{P}[X|Y=1)]\mathbb{P}[Y=1)]}{\mathbb{P}[X|Y=1)]\mathbb{P}[Y=1)]+\mathbb{P}[X|Y=0)]\mathbb{P}[Y=0)]}$
+    -   the "generative" approach: we model the conditional distribution $\mathbf P_{\mathrm X | \mathrm Y}$ and use Bayes formula to get: $\eta(X)=\frac{\mathbb{P}[X|Y=1)]\mathbb{P}[Y=1)]}{\mathbb{P}[X]}=\frac{\mathbb{P}[X|Y=1)]\mathbb{P}[Y=1)]}{\mathbb{P}[X|Y=1)]\mathbb{P}[Y=1)]+\mathbb{P}[X|Y=0)]\mathbb{P}[Y=0)]}$
 
--   the optimization or "machine learning" approach: finding $f$ minimizing the empirical risk; optimization algorithm or heuristics are used to estimate $f$; the 0-1 loss is not convex so usually it is replaced by a convex surrogate loss or upper bound; usually re-sampling methods are used to compute empirical risk ($f$ is trained on a training set and empirical risk evaluated on the testing set, $f$ is chosen to minimize empirical risk). 
+-   the optimization or "machine learning" approach: finding $f$ minimizing the empirical risk; optimization algorithm or heuristics are used to estimate $f$; the 0-1 loss is not convex so usually it is replaced by a convex surrogate loss or upper bound; usually re-sampling methods are used to compute empirical risk ($f$ is trained on a training set and empirical risk evaluated on the testing set, $f$ is chosen to minimize empirical risk).
 
-We will see later that in the context of the Logistic Regression the two approaches are strongly linked: it can be seen as a probabilistic|discriminative approach or a optimization approach.
+We will see later that in the context of the Logistic Regression the two approaches are strongly linked: it can be seen as a probabilistic\|discriminative approach or a optimization approach.
 
 ## Illustrative example: the **Mixture** data set
 
@@ -574,7 +566,6 @@ scale_colour_manual(values = c("dodgerblue", "orange")) +
 theme_void()
 ```
 
-
 ```{r}
 logit_splines_add_tens_error_rate <- broom::augment(mixture_example_glm_splines_add_tens,
                                    data = data_mixture_example,
@@ -716,7 +707,6 @@ logit_binned_risk <- logit_binned_error_rate  %>%
 ```
 
 The empirical risk on testing set is `r round(logit_binned_risk, 3)`.
-
 
 ### K-Nearest Neighbors Algorithm
 
@@ -1278,9 +1268,9 @@ In the rest of the course we will be equally interested in binary classification
 
 Throughout the course, we will focus on two fundamental and complementary models: the Logistic Regression model and Decision Trees.
 
-Logistic Regression adopts a "probabilistic|discriminative" approach to model with a parametric law the conditional probability $Y|X$ and then estimate the parameters of the regression function.
+Logistic Regression adopts a "probabilistic\|discriminative" approach to model with a parametric law the conditional probability $Y|X$ and then estimate the parameters of the regression function.
 
-On the other hand, Decision Trees adopt a "machine learning" approach, aiming to minimize empirical risk. 
+On the other hand, Decision Trees adopt a "machine learning" approach, aiming to minimize empirical risk.
 
 These two models serve as the foundation elements for modern machine learning algorithm, making them essential components of the classification/scoring toolkit.
 
@@ -2001,14 +1991,13 @@ summary(model_desbois)
 
 # Exercises
 
-
 ## ROC curves
 
 Using the Mixture data set, plot ROC curves for some chosen classifiers:
 
 -   first by implementing from scratch a method for plotting ROC curves using the course definition:
 
-For a given threshold $s$ and passing as argument a column of outputs $Y$ together with a score column (i.e. predicted probabilities)  define a function to obtain the False/True Positive Rates:
+For a given threshold $s$ and passing as argument a column of outputs $Y$ together with a score column (i.e. predicted probabilities) define a function to obtain the False/True Positive Rates:
 
 ```{r}
 #| code-fold: show
@@ -2087,7 +2076,7 @@ library("ROCR")
 
 Considering a pair of random variables $(X, Y)$ taking values in $\mathbb R\times\{0,1\}$ with:
 
-$X\sim\mathcal U[-2,2]$\text{,}\quad $U\sim\mathcal U[0,10]$ 
+$X\sim\mathcal U[-2,2]$\text{,}\quad $U\sim\mathcal U[0,10]$
 
 and:
 
@@ -2099,8 +2088,7 @@ Y|X=x  & =\left\{
 \mathbf 1_{U>1}  & \textrm{if } x>0
 \end{array}\right.
 \end{align*}
-$$
-where $\mathcal U[a, b]$ denotes the uniform distribution on $[a,b]$ and $X$ and $U$ are assumed to be independent. 
+$$ where $\mathcal U[a, b]$ denotes the uniform distribution on $[a,b]$ and $X$ and $U$ are assumed to be independent.
 
 Calculate the Bayes classifier and the Bayes risk.
 
@@ -2109,15 +2097,15 @@ Calculate the Bayes classifier and the Bayes risk.
 Simulate other toy data sets, and plot decision boundaries. For example:
 
 -   Data set 1:
-    -   Class 0: mixture of $\mu_{0a}=\begin{bmatrix} 1  \\ 4  \end{bmatrix}$, $\mu_{0b}=\begin{bmatrix} 1  \\ -4  \end{bmatrix}$ $\Sigma_{0a}=\Sigma_{0b}=\begin{bmatrix} 2 & 0 \\ 0 & 2 \end{bmatrix}$
-    -   Class 1: $\mu_{1}=\begin{bmatrix} 4  \\ 0  \end{bmatrix}$ $\Sigma_{1}=\begin{bmatrix} 2 & 0 \\ 0 & 4 \end{bmatrix}$
+
+    -   Class 0: mixture of $\mu_{0a}=\begin{bmatrix} 1 \\ 4 \end{bmatrix}$, $\mu_{0b}=\begin{bmatrix} 1 \\ -4 \end{bmatrix}$ $\Sigma_{0a}=\Sigma_{0b}=\begin{bmatrix} 2 & 0 \\ 0 & 2 \end{bmatrix}$
+    -   Class 1: $\mu_{1}=\begin{bmatrix} 4 \\ 0 \end{bmatrix}$ $\Sigma_{1}=\begin{bmatrix} 2 & 0 \\ 0 & 4 \end{bmatrix}$
+
 -   Data set 2 (using a "generative" approach, with same assumptions as QDA): Given $\mu_0$, $\mu_1$, $\Sigma_0$ and $\Sigma_1$ and $X$ having values in $\mathbb R^2$:
 
+    -   $X|Y=0 \sim\mathcal N[\mu_0,\Sigma_0]$,
 
-    - $X|Y=0 \sim\mathcal N[\mu_0,\Sigma_0]$,
-
-    - $X|Y=1 \sim\mathcal N[\mu_1,\Sigma_1]$ and $\mathbb{P}[Y=1]=\pi$
-    
+    -   $X|Y=1 \sim\mathcal N[\mu_1,\Sigma_1]$ and $\mathbb{P}[Y=1]=\pi$
 
 # References
 
