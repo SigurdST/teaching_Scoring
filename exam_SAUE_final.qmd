@@ -1,0 +1,516 @@
+---
+title: "Exam Scoring"
+author: "Sigurd SAUE"
+format: 
+  html:
+    code-tools:
+      source: true
+editor: visual
+theme: united
+---
+
+### We first upload the data
+
+```{r}
+data <- readRDS('exam/data/data_fin_exam.rds')
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+# Package names
+packages <- c("tidyverse", "ROCR", "car", "aod", "broom", "rsample", "bestglm", "glmnet", "glmnetUtils", "splines", "dplyr", "reshape2", "caret", "ResourceSelection", "pROC")
+# Install packages not yet installed
+installed_packages <- packages %in% rownames(installed.packages())
+if (any(installed_packages == FALSE)) {
+install.packages(packages[!installed_packages]) }
+# # Packages loading
+invisible(lapply(packages, library, character.only = TRUE))
+#
+# Additional packages used throughout the course but not needed for the analysis
+additional_packages <- c( "purrr", "pROC", "foreign", "patchwork", "class",
+"scales", "rpart", "rpart.plot", "DescTools")
+```
+
+# Desbois ratios
+
+### Descriptive statistics
+
+```{r}
+
+# Statistical summary of the data
+summary(data)
+
+# Correlation between Y and r1:r37
+Y <- data$Y
+Y <- as.numeric(as.character(Y))
+data_r<- data[, 25:ncol(data)]
+
+compte <- table(Y)
+print(compte)
+
+# Afficher les résultats
+print(compte)
+
+correlations <- cor(Y, data_r, use = "complete.obs")
+print(correlations)
+```
+
+We can see that the correlation between Y and the variables r1 to r37 is very low.
+
+```{r}
+
+# Correlation between the variables r1:r37
+
+correlation_matrix <- cor(data_r, use = "complete.obs")
+
+correlation_df <- melt(correlation_matrix)
+colnames(correlation_df) <- c("Variable1", "Variable2", "Correlation")
+
+# We look for the srongest correlations
+
+strong_correlations <- correlation_df %>%
+  filter(abs(Correlation) > 0.7, Variable1 != Variable2) %>%
+  arrange(desc(abs(Correlation)))
+print(strong_correlations)
+```
+
+We observe very strong coreelation (positive, but also negative) between some variables.
+
+Now, we will plot interactions between the response variable Y and some of the numerical features r1 to r37.
+
+```{r}
+# We first sort the correlations
+
+correlation_df_r <- as.data.frame(as.table(correlations))
+
+strongest_corr <- correlation_df_r %>%
+  arrange(desc(abs(Freq)))
+
+print(strongest_corr)
+
+# Now, we plot the interactions between Y and the most interesting variables
+
+ggplot(data, aes(x = r18, y = Y)) +
+  geom_point() +                # Scatter points
+  geom_smooth(method = "lm") +  # Add a linear regression line
+  labs(title = "Interaction of Numerical Feature with Response Variable",
+       x = "r18",
+       y = "Y")
+
+ggplot(data, aes(x = r6, y = Y)) +
+  geom_point() +                # Scatter points
+  geom_smooth(method = "lm") +  # Add a linear regression line
+  labs(title = "Interaction of Numerical Feature with Response Variable",
+       x = "r6",
+       y = "Y")
+
+ggplot(data, aes(x = r30, y = Y)) +
+  geom_point() +                # Scatter points
+  geom_smooth(method = "lm") +  # Add a linear regression line
+  labs(title = "Interaction of Numerical Feature with Response Variable",
+       x = "r30",
+       y = "Y")
+
+ggplot(data, aes(x = r28, y = Y)) +
+  geom_point() +                # Scatter points
+  geom_smooth(method = "lm") +  # Add a linear regression line
+  labs(title = "Interaction of Numerical Feature with Response Variable",
+       x = "r28",
+       y = "Y")
+```
+
+The plot confirms that r18 and r6 are correlated with Y, while r30 is negatively correlated with Y and r28 is not correlated with Y.
+
+### Cleaning the dataset
+
+Looking for NaN:
+
+```{r}
+
+df <-cbind(Y, data_r)
+
+# We delete any rows with NaN values
+df <- na.omit(df)
+
+# We check if there is no duplicate rows
+df <- distinct(df)
+
+# We remove columns that are too correlated (r32 with r28 and r7 with r6, and r2 with r5)
+
+df_clean <- df %>%
+  select(-c(r32, r7, r5))
+
+# We also remove all the variable with a correlation lower than abs(0.2 with Y)
+
+df_clean <- df_clean %>%
+  select(-c(r2, r17, r14, r4, r12, r36, r24, r11, r3, r37, r28))
+
+remove_outliers <- function(x) {
+  Q1 <- quantile(x, 0.10)
+  Q3 <- quantile(x, 0.90)
+  IQR <- Q3 - Q1
+  lower_bound <- Q1 - 1.5 * IQR
+  upper_bound <- Q3 + 1.5 * IQR
+  return(x >= lower_bound & x <= upper_bound)
+}
+
+df_clean <- df_clean[apply(df_clean[ , !names(df_clean) %in% 'Y'], 1, function(row) all(remove_outliers(row))), ]
+
+```
+
+### Logistic regression
+
+Now that we have a clean dataset, we can try a logistic regression.
+
+```{r}
+
+# Fit the full logistic regression model
+full_model_desbois <- glm(Y ~ ., 
+                          data = df_clean, 
+                          family = binomial,
+                          maxit = 1000)
+
+# Display the summary of the model
+summary(full_model_desbois)
+
+
+```
+### Stepwise model
+
+```{r}
+
+# Effectuer la sélection pas à pas en utilisant le critère AIC
+stepwise_model_desbois <- step(full_model_desbois, direction = "both", trace = 0)
+
+# Résumé du modèle final
+summary(stepwise_model_desbois)
+```
+### Comparing both model with a Log-likelihood ratio test
+
+```{r}
+
+# Log Likelihood ratio test
+lrt_result <- anova(full_model_desbois, stepwise_model_desbois, test = "LRT")
+print(lrt_result)
+```
+
+```{r}
+
+# Calculate predictef 
+predicted_probs <- predict(stepwise_model_desbois, type = "response")
+
+# Effectuer le test de Hosmer-Lemeshow
+hosmer_lemeshow_result <- hoslem.test(df_clean$Y, predicted_probs)
+
+# Afficher les résultats du test
+print(hosmer_lemeshow_result)
+```
+
+
+# Altman ratios
+
+We create the new predictor
+
+```{r}
+X1 = data$wcap / data$at
+X2 = data$re / data$at
+X3 = data$ebit / data$at
+X4 = data$mktval / data$at
+X5 = data$sale / data$at
+Z = 0.012*X1 + 0.014*X2 + 0.033*X3 + 0.006*X4 + 0.999*X5
+```
+
+We fit a logistic regression with X1 to X5
+
+```{r}
+
+df_altman <- data.frame(
+  Y = data$Y,
+  X1 = X1,
+  X2 = X2,
+  X3 = X3,
+  X4 = X4,
+  X5 = X5
+)
+
+model_altman <- glm(Y ~ ., 
+                          data = df_altman,
+                          family = binomial,
+                          maxit = 1000)
+summary(model_altman)
+
+```
+
+The coefficient for X3 represents the change in the log odds (log ) of the response variable Y for a one-unit increase in X3. Here it's negative which means a higher value of X3 increase the probability of Y = 0.
+
+The p-value is close to zero, which means that X3 is significant for Y.
+
+Now we calculate a confidence interval at 95% for X3's coefficient.
+
+```{r, warning=FALSE}
+conf_int <- confint(model_altman)
+x3_conf_int <- conf_int["X3", ]
+print(x3_conf_int)
+
+```
+
+# Financial Items / Lasso
+
+### Descriptive statistics
+
+```{r}
+# We create the variable capx/mktval
+data_l <- data[, 2:24]
+
+correlations2 <- cor(Y, data_l, use = "complete.obs")
+print(correlations2)
+```
+
+We observe really low correlations between the variables and Y.
+
+```{r}
+
+# Correlation between the variables r1:r37
+
+correlation_matrix2 <- cor(data_l, use = "complete.obs")
+
+correlation_df2 <- melt(correlation_matrix2)
+colnames(correlation_df2) <- c("Variable1", "Variable2", "Correlation")
+
+# We look for the srongest correlations
+
+strong_correlations <- correlation_df2 %>%
+  filter(abs(Correlation) > 0.7, Variable1 != Variable2) %>%
+  arrange(desc(abs(Correlation)))
+```
+
+We observe really strong correlations between a lot of variables.
+
+```{r}
+# We first sort the correlations
+
+correlation_df_l <- as.data.frame(as.table(correlations2))
+
+strongest_corr2 <- correlation_df_l %>%
+  arrange(desc(abs(Freq)))
+
+print(strongest_corr2)
+
+# Now, we plot the interactions between Y and the most interesting variables
+
+ggplot(data, aes(x = ni, y = Y)) +
+  geom_point() +                # Scatter points
+  geom_smooth(method = "lm") +  # Add a linear regression line
+  labs(title = "Interaction of Numerical Feature with Response Variable",
+       x = "ni",
+       y = "Y")
+
+ggplot(data, aes(x = xint, y = Y)) +
+  geom_point() +                # Scatter points
+  geom_smooth(method = "lm") +  # Add a linear regression line
+  labs(title = "Interaction of Numerical Feature with Response Variable",
+       x = "xint",
+       y = "Y")
+
+ggplot(data, aes(x = dltt, y = Y)) +
+  geom_point() +                # Scatter points
+  geom_smooth(method = "lm") +  # Add a linear regression line
+  labs(title = "Interaction of Numerical Feature with Response Variable",
+       x = "dltt",
+       y = "Y")
+
+```
+
+The plot confirms that ni are a bit correlated with Y, while xint is smally negatively correlated with Y and sltt is not correlated with Y.
+
+Now, we delete variables with to much correlation.
+
+```{r}
+
+threshold <- 0.8
+
+to_drop <- findCorrelation(correlation_matrix2, cutoff = threshold)
+
+data_l <- data_l[, -to_drop]
+
+```
+
+### Logistic regression
+
+```{r}
+
+data_lasso <- cbind(Y, data_l)
+
+# Fit the full logistic regression model
+full_model_items <- glm(Y ~ ., 
+                          data = data_lasso, 
+                          family = binomial,
+                          maxit = 1000)
+
+# Display the summary of the model
+summary(full_model_items)
+
+```
+
+
+# Models assessment
+
+### Altman predictors
+
+```{r}
+
+# loading data and inspecting it:
+data_fin_holdout <- readRDS('exam/data/data_fin_holdout.rds')
+Y_test = data_fin_holdout$Y
+X_test = data_fin_holdout[, -which(names(data_fin_holdout) %in% c("Y"))]
+
+# Altman model
+length(Y_test)
+X1_2 = data_fin_holdout$wcap / data_fin_holdout$at
+X2_2 = data_fin_holdout$re / data_fin_holdout$at
+X3_2 = data_fin_holdout$ebit / data_fin_holdout$at
+X4_2 = data_fin_holdout$mktval / data_fin_holdout$at
+X5_2 = data_fin_holdout$sale / data_fin_holdout$at
+
+df_altman_test <- data.frame(
+  Y = Y_test,
+  X1 = X1_2,
+  X2 = X2_2,
+  X3 = X3_2,
+  X4 = X4_2,
+  X5 = X5_2
+)
+
+model_altman_pred <- predict(model_altman, newdata = df_altman_test, type = "response")
+
+```
+
+### ROC curves
+
+```{r, warning=FALSE}
+
+# Full Model Desbois
+full_model_desbois_pred <- predict(full_model_desbois, newdata = X_test, type = "response")
+
+# Stepwise Model Desbois
+stepwise_model_desbois_pred <- predict(stepwise_model_desbois, newdata = X_test, type = "response")
+
+# Full Model Items
+full_model_items_pred <- predict(full_model_items, newdata = X_test, type = "response")
+
+# We calculate the ROC curves
+roc_full_model_desbois <- roc(Y_test, full_model_desbois_pred)
+roc_stepwise_model_desbois <- roc(Y_test, stepwise_model_desbois_pred)
+roc_model_altman <- roc(Y_test, model_altman_pred)
+roc_full_model_items <- roc(Y_test, full_model_items_pred)
+
+# Calculate AUC for each model
+auc_full_model_desbois <- auc(roc_full_model_desbois)
+auc_stepwise_model_desbois <- auc(roc_stepwise_model_desbois)
+auc_model_altman <- auc(roc_model_altman)
+auc_full_model_items <- auc(roc_full_model_items)
+
+# Print AUCs
+cat("AUC for Full Model Desbois: ", auc_full_model_desbois, "\n")
+cat("AUC for Stepwise Model Desbois: ", auc_stepwise_model_desbois, "\n")
+cat("AUC for Model Altman: ", auc_model_altman, "\n")
+cat("AUC for Full Model Items: ", auc_full_model_items, "\n")
+
+# Plot ROC curves
+roc_data <- data.frame(
+  specificity = c(roc_full_model_desbois$specificities,  
+                  roc_stepwise_model_desbois$specificities,
+                  roc_model_altman$specificities,  
+                  roc_full_model_items$specificities),
+  sensitivity = c(roc_full_model_desbois$sensitivities,
+                  roc_stepwise_model_desbois$sensitivities,
+                  roc_model_altman$sensitivities, roc_full_model_items$sensitivities),
+  model = rep(c("Full Model Desbois", "Stepwise Model",  "Model Altman", 
+                "Full Model Items"), 
+              times = c(length(roc_full_model_desbois$specificities),
+                        length(roc_stepwise_model_desbois$specificities),
+                        length(roc_model_altman$specificities),
+                        length(roc_full_model_items$specificities)))
+)
+
+ggplot(roc_data, aes(x = 1 - specificity, y = sensitivity, color = model)) +
+  geom_line(size = 1) +
+  geom_abline(linetype = "dashed", color = "gray") +
+  labs(title = "ROC Curves for Different Models", x = "1 - Specificity", y = "Sensitivity") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+The Altman model looks to be the best one.
+
+# Simulation and boundary decision
+```{r}
+
+# Simulation and boundary decision
+set.seed(25)
+library(MASS)
+
+# Function to simulate data
+simulate_data <- function(n_train = 200, n_test = 2000) {
+  # Class 0: mixture of two Gaussians
+  mu0a <- c(1, 1)
+  mu0b <- c(-1, -1)
+  Sigma0 <- matrix(c(4, 0, 0, 4), nrow = 2)
+  
+  # Class 1: only one Gaussian
+  mu1 <- c(4, 4)
+  Sigma1 <- matrix(c(4, 0, 0, 4), nrow = 2)
+  
+  # Train set
+  n_train_class0 <- n_train / 2
+  n_train_class1 <- n_train - n_train_class0
+  
+  X_train_class0a <- mvrnorm(n_train_class0 / 2, mu0a, Sigma0)
+  X_train_class0b <- mvrnorm(n_train_class0 / 2, mu0b, Sigma0)
+  X_train_class1 <- mvrnorm(n_train_class1, mu1, Sigma1)
+  
+  y_train_class0 <- rep(0, n_train_class0)
+  y_train_class1 <- rep(1, n_train_class1)
+  
+  X_train <- rbind(X_train_class0a, X_train_class0b, X_train_class1)
+  y_train <- c(y_train_class0, y_train_class1)
+  
+  # Test set
+  n_test_class0 <- n_test / 2
+  n_test_class1 <- n_test - n_test_class0
+  
+  X_test_class0a <- mvrnorm(n_test_class0 / 2, mu0a, Sigma0)
+  X_test_class0b <- mvrnorm(n_test_class0 / 2, mu0b, Sigma0)
+  X_test_class1 <- mvrnorm(n_test_class1, mu1, Sigma1)
+  
+  y_test_class0 <- rep(0, n_test_class0)
+  y_test_class1 <- rep(1, n_test_class1)
+  
+  X_test <- rbind(X_test_class0a, X_test_class0b, X_test_class1)
+  y_test <- c(y_test_class0, y_test_class1)
+  
+  list(X_train = X_train, y_train = y_train, X_test = X_test, y_test = y_test)
+}
+
+# We simulate the data
+data <- simulate_data()
+
+# Data frame from test set
+train_data <- data.frame(x1 = data$X_train[, 1], x2 = data$X_train[, 2], y = data$y_train)
+test_data <- data.frame(x1 = data$X_test[, 1], x2 = data$X_test[, 2], y = data$y_test)
+
+# Model 1: simple logistic regression (Y ~ x1 + x2)
+model1 <- glm(y ~ x1 + x2, data = train_data, family = binomial)
+pred_model1 <- predict(model1, test_data, type = "response")
+pred_class1 <- ifelse(pred_model1 > 0.5, 1, 0)
+
+# Model 2: Logistic regression with interaction terms and quadratic terms (Y ~ x1 * x2 + I(x1^2) + I(x2^2))
+model2 <- glm(y ~ x1 * x2 + I(x1^2) + I(x2^2), data = train_data, family = binomial)
+pred_model2 <- predict(model2, test_data, type = "response")
+pred_class2 <- ifelse(pred_model2 > 0.5, 1, 0)
+
+# Misclassification error
+error_model1 <- mean(pred_class1 != test_data$y)
+error_model2 <- mean(pred_class2 != test_data$y)
+
+cat("Erreur de classification du Modèle 1 :", error_model1, "\n")
+cat("Erreur de classification du Modèle 2 :", error_model2, "\n")
+```

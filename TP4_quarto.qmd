@@ -1,0 +1,258 @@
+---
+title: "TP4 - DA"
+author: "Sigurd SAUE"
+format: 
+  html:
+    code-tools:
+      source: true
+editor: visual
+---
+
+# Part 1
+
+
+```{r}
+
+# PART 1
+# LDA for data reduction and classification in the 2 class case
+# Small LDA example (M1 course)
+library(MASS) # package that contains the lda and qda functions
+# Data 
+x=read.table("/Users/sigurd.saue/Desktop/M2S1/Data Mining/Code/data_da-2.txt",header=TRUE)
+x
+str(x)
+
+# Transformation of the variable to predict in a factor
+x$Res=as.factor(x$Res)
+fit <- lda(Res ~ Dip + Test + Exp, data=x,
+           na.action="na.omit")
+fit # show results 
+plot(fit) # plot results
+pred <- predict(fit,x) # predict a class
+
+# percent correct for each category of Res
+ct <- table(x$Res, pred$class)
+ct
+diag(prop.table(ct, 1))
+# total percent correct
+sum(diag(prop.table(ct)))
+
+library(ROCR)
+pred <- prediction(pred$posterior[,2], x$Res) 
+perf <- performance(pred,"tpr","fpr")
+plot(perf,colorize=TRUE)
+
+```
+
+# Part 2
+
+```{r, echo=FALSE}
+
+decisionplot <- function(model, data, class = NULL, predict_type = "class",
+  resolution = 100, showgrid = TRUE, ...) {
+
+  if(!is.null(class)) cl <- data[,class] else cl <- 1
+  data <- data[,1:2]
+  k <- length(unique(cl))
+
+  plot(data, col = as.integer(cl)+1L, pch = as.integer(cl)+1L, ...)
+
+  # make grid
+  r <- sapply(data, range, na.rm = TRUE)
+  xs <- seq(r[1,1], r[2,1], length.out = resolution)
+  ys <- seq(r[1,2], r[2,2], length.out = resolution)
+  g <- cbind(rep(xs, each=resolution), rep(ys, time = resolution))
+  colnames(g) <- colnames(r)
+  g <- as.data.frame(g)
+
+  ### guess how to get class labels from predict
+  ### (unfortunately not very consistent between models)
+  p <- predict(model, g, type = predict_type)
+  if(is.list(p)) p <- p$class
+  p <- as.factor(p)
+
+  if(showgrid) points(g, col = as.integer(p)+1L, pch = ".")
+
+  z <- matrix(as.integer(p), nrow = resolution, byrow = TRUE)
+  contour(xs, ys, z, add = TRUE, drawlabels = FALSE,
+    lwd = 2, levels = (1:(k-1))+.5)
+
+  invisible(z)
+}
+
+decisionplot_ggplot <- function(model, data, class = NULL, predict_type = "class",
+                                resolution = 100, showgrid = TRUE, ...) {
+  
+  if(!is.null(class)) cl <- data[,class] else cl <- 1
+  data <- data[,1:2]
+  cn <- colnames(data)
+  
+  k <- length(unique(cl))
+  
+  data$pch <- data$col <- as.integer(cl) + 1L
+  gg <- ggplot(aes_string(cn[1], cn[2]), data = data) + 
+    geom_point(aes_string(col = 'as.factor(col)', shape = 'as.factor(col)'), size = 3)
+  
+  # make grid
+  r <- sapply(data[, 1:2], range, na.rm = TRUE)
+  xs <- seq(r[1, 1], r[2, 1], length.out = resolution)
+  ys <- seq(r[1, 2], r[2, 2], length.out = resolution)
+  
+  g <- cbind(rep(xs, each = resolution), 
+             rep(ys, time = resolution))
+  colnames(g) <- colnames(r)
+  
+  g <- as.data.frame(g)
+  
+  ### guess how to get class labels from predict
+  ### (unfortunately not very consistent between models)
+  p <- predict(model, g, type = predict_type)
+  if(is.list(p)) p <- p$class
+  g$col <- g$pch <- as.integer(as.factor(p)) + 1L
+  
+  if(showgrid) 
+    gg <- gg + geom_point(aes_string(x = cn[1], y = cn[2], col = 'as.factor(col)'), data = g, shape = 20, size = 1)
+  
+  gg + geom_contour(aes_string(x = cn[1], y = cn[2], z = 'col'), data = g, inherit.aes = FALSE)
+}
+
+```
+
+```{r, warning=FALSE, message=FALSE}
+
+library(ggplot2)
+
+model1 <- qda(Species ~ Sepal.Length + Sepal.Width, iris)
+model2 <- lda(Species ~ Sepal.Length + Sepal.Width, iris)
+
+# Source the functions decisionplot and decisionplot_ggplot given below and plot the class boundaries
+
+decisionplot(model1, iris, class = "Species") # the code is below
+decisionplot(model2, iris, class = "Species")
+
+decisionplot_ggplot(model1, iris, class = "Species") # the code is below
+decisionplot_ggplot(model2, iris, class = "Species")
+
+```
+# Part 3
+
+
+```{r}
+library(caret)
+library(dplyr)
+library(forcats)
+adults <- read.csv("/Users/sigurd.saue/Desktop/M2S1/Data Mining/Code/adult.data", header=FALSE, stringsAsFactors=TRUE)
+names(adults) <- c("age", "workclass", "fnlwgt", "education", "education_num",
+                   "marital_status", "occupation", "relationship", "race",
+                   "sex", "capital_gain", "capital_loss", "hours_per_week",
+                   "native_country", "salary")
+adults <- adults %>%
+  select(age, fnlwgt, education, sex, capital_gain, capital_loss, salary) %>%
+  mutate(education=fct_collapse(education,
+                                NoHS=c(" 10th", " 11th", " 12th", " 1st-4th",
+                                       " 5th-6th", " 7th-8th", " 9th", " Preschool"),
+                                Associates=c(" Assoc-acdm", " Assoc-voc"),
+                                Bachelors=" Bachelors", Doctorate=" Doctorate",
+                                Masters=" Masters", HSgrad=" HS-grad",
+                                ProfSchool=" Prof-school", SomeCollege=" Some-college"),
+         capital_gain = 1*(capital_gain>0),
+         capital_loss = 1*(capital_loss>0))
+lda_adults <- train(data=adults, salary ~ ., method="lda",
+                    trControl=trainControl(method="cv", number=10))
+qda_adults <- train(data=adults, salary ~ ., method="qda",
+                    trControl=trainControl(method="cv", number=10))
+logistic_adults <- train(data=adults, salary ~ ., method="multinom",
+                         trControl=trainControl(method="cv", number=10))
+lda_adults$results
+## parameter Accuracy Kappa AccuracySD KappaSD
+## 1 none 0.8084827 0.4027094 0.006854388 0.02113622
+qda_adults$results
+## parameter Accuracy Kappa AccuracySD KappaSD
+## 1 none 0.7888579 0.3678485 0.007552935 0.02022411
+logistic_adults$results
+```
+
+
+# Gaussians mixtures
+
+```{r}
+# Load necessary library
+library(MASS)
+
+# Function to generate Gaussian mixture data
+generate_gaussian_mixture <- function(n_samples, means, covariances) {
+  samples <- list()
+  
+  for (i in seq_along(means)) {
+    samples[[i]] <- mvrnorm(n_samples, mu = means[[i]], Sigma = covariances[[i]])
+  }
+  
+  return(do.call(rbind, samples))
+}
+
+# Set seed for reproducibility
+set.seed(42)
+
+# 1. Mixture with 2 components in 2 dimensions with different covariance matrices
+means_2D_2comp <- list(c(0, 0), c(5, 5))
+covariances_2D_2comp <- list(matrix(c(1, 0.5, 0.5, 1), nrow = 2), 
+                              matrix(c(2, 0, 0, 2), nrow = 2))
+data_2D_2comp <- generate_gaussian_mixture(200, means_2D_2comp, covariances_2D_2comp)
+
+# 2. Mixture with 4 components in 2 dimensions with the same covariance matrix
+means_2D_4comp_same <- list(c(-5, -5), c(0, 5), c(5, 0), c(5, -5))
+covariance_2D_4comp_same <- matrix(c(1, 0, 0, 1), nrow = 2)
+data_2D_4comp_same <- generate_gaussian_mixture(200, means_2D_4comp_same, 
+                                                list(covariance_2D_4comp_same, 
+                                                      covariance_2D_4comp_same, 
+                                                      covariance_2D_4comp_same, 
+                                                      covariance_2D_4comp_same))
+
+# 3. Mixture with 4 components in 2 dimensions with different covariance matrices
+means_2D_4comp_diff <- list(c(-5, -5), c(0, 5), c(5, 0), c(5, -5))
+covariances_2D_4comp_diff <- list(matrix(c(1, 0.8, 0.8, 1), nrow = 2), 
+                                   matrix(c(1, -0.6, -0.6, 1), nrow = 2), 
+                                   matrix(c(1.5, 0.5, 0.5, 1.5), nrow = 2), 
+                                   matrix(c(1, 0, 0, 3), nrow = 2))
+data_2D_4comp_diff <- generate_gaussian_mixture(200, means_2D_4comp_diff, covariances_2D_4comp_diff)
+
+# 4. Mixture with 2 components in 4 dimensions with the same covariance matrix
+means_4D_2comp <- list(c(0, 0, 0, 0), c(5, 5, 5, 5))
+covariance_4D_2comp_same <- diag(4)
+data_4D_2comp_same <- generate_gaussian_mixture(200, means_4D_2comp, 
+                                                list(covariance_4D_2comp_same, 
+                                                      covariance_4D_2comp_same))
+```
+
+# LCA and QDA on the Gaussians mixtures
+
+```{r}
+
+# We create dataframes with the Gaussians mixtures
+df_2D_2comp <- data.frame(x=data_2D_2comp[,1], y=data_2D_2comp[,2])
+colnames(df_2D_2comp) <- c("x", "y")
+df_2D_4comp_same <- data.frame(x=data_2D_4comp_same[,1], y=data_2D_4comp_same[,2])
+colnames(df_2D_4comp_same) <- c("x", "y")
+df_2D_4comp_diff <- data.frame(x=data_2D_4comp_diff[,1], y=data_2D_4comp_diff[,2])
+colnames(df_2D_4comp_diff) <- c("x", "y")
+
+# FIRST GAUSSAIN MIXTURE
+# Transformation of the variable to predict in a factor
+fit1 <- lda( ~ x + y, data=df_2D_2comp,
+           na.action="na.omit")
+fit1 # show results 
+plot(fit) # plot results
+pred <- predict(fit,x) # predict a class
+
+# percent correct for each category of Res
+ct <- table(x$Res, pred$class)
+ct
+diag(prop.table(ct, 1))
+# total percent correct
+sum(diag(prop.table(ct)))
+
+library(ROCR)
+pred <- prediction(pred$posterior[,2], x$Res) 
+perf <- performance(pred,"tpr","fpr")
+plot(perf,colorize=TRUE)
+```
